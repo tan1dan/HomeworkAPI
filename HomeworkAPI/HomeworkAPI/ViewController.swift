@@ -7,9 +7,13 @@
 
 import UIKit
 
+enum NotificationStorage {
+    static let notificationName = NSNotification.Name.init("usersInfo")
+}
+
 struct Geo: Codable {
-    let lat: Double
-    let lng: Double
+    let lat: String
+    let lng: String
     
     enum CodingKeys: CodingKey {
         case lat
@@ -18,8 +22,8 @@ struct Geo: Codable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.lat = try container.decode(Double.self, forKey: .lat)
-        self.lng = try container.decode(Double.self, forKey: .lng)
+        self.lat = try container.decode(String.self, forKey: .lat)
+        self.lng = try container.decode(String.self, forKey: .lng)
     }
 }
 
@@ -102,45 +106,86 @@ struct User: Codable {
 }
 
 class ViewController: UIViewController {
-
+    
+    var users: [User] = []
+    let loadingView = LoadingView()
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        if let url = URL(string: "https://jsonplaceholder.typicode.com/users"){
-            let urlRequest = URLRequest(url: url)
-            let session = URLSession.shared
-            let dataTask = session.dataTask(with: urlRequest) { data, response, error in
-                if error == nil {
-                    if let data = data{
-                        
-                        do {
-                            if let jsonString = String(data: data, encoding: .utf8) {
-                                print("JSON-строка: \(jsonString)")
+        view.backgroundColor = .white
+        saveUsers()
+        constraintsLoading()
+    }
+    
+    private func saveUsers(){
+        DispatchQueue.global().sync {
+            if let url = URL(string: "https://jsonplaceholder.typicode.com/users"){
+                let urlRequest = URLRequest(url: url)
+                let session = URLSession.shared
+                let dataTask = session.dataTask(with: urlRequest) {
+                    data,
+                    response,
+                    error in
+                    if error == nil {
+                        if let data = data{
+                            
+                            do {
+                                if let jsonString = String(data: data, encoding: .utf8) {
+                                    print("JSON-строка: \(jsonString)")
+                                }
+                                
+                                let users = try JSONDecoder().decode([User].self, from: data)
+    
+                                self.users = users
+                                
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                    let tableVC = TableViewController()
+                                    tableVC.sendClosure { [weak self] in
+                                        return users
+                                    }
+                                    self.navigationController?.setNavigationBarHidden(false, animated: false)
+                                    self.navigationController?.pushViewController(tableVC, animated: false)
+                                    self.navigationController?.viewControllers.first?.removeFromParent()
+                                }
+                            } catch let error{
+                                print(error)
+                            }
+                            do {
+                                if let dict = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [Any] {
+                                    
+                                    for user in dict {
+                                        print("dict \(user)")
+                                    }
+                                }
+                                
+                            } catch let error {
+                                print(error)
                             }
                             
-                            let users = try JSONDecoder().decode([User].self, from: data)
-                            
-                            for user in users {
-                                print(user)
-                            }
-                            
-                        } catch {
-                            print("error JSONDecoder")
+                        } else {
+                            print("Data == nil")
+                            return
                         }
-                        
-                    } else {
-                        print("Data == nil")
+                    }else {
+                        print("Error urlRequest")
                         return
                     }
-                }else {
-                    print("Error urlRequest")
-                    return
                 }
+                dataTask.resume()
             }
-            dataTask.resume()
         }
-        
+    }
+    
+    private func constraintsLoading(){
+        loadingView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingView)
+        NSLayoutConstraint.activate([
+            loadingView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            loadingView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            loadingView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
         
     }
+
 }
 
